@@ -1,5 +1,7 @@
 from flask_bcrypt import Bcrypt
 from flask_sqlalchemy import SQLAlchemy
+import datetime
+import jwt
 
 bcrypt = Bcrypt()
 db = SQLAlchemy()
@@ -35,8 +37,29 @@ class User(db.Model):
         return user
 
     @classmethod
-    def authenticate(cls, username, password):
-        user = cls.query.filter_by(username=username).first()
+    def authenticate(cls, email, password):
+        """
+        Autentica um usuário e gera um token JWT contendo o id e o email do usuário.
+        """
+        user = cls.query.filter_by(email=email).first()
         if user and bcrypt.check_password_hash(user.password, password):
-            return user
+            # Gera o token JWT com id e email no payload
+            auth_token = user.encode_auth_token(os.getenv('SECRET_KEY'))  # Usa variável de ambiente para a chave secreta
+            return user, auth_token
         return False
+
+    def encode_auth_token(self, secret_key):
+        """
+        Gera um token JWT com id e email do usuário no payload.
+        """
+        try:
+            payload = {
+                'exp': datetime.datetime.utcnow() + datetime.timedelta(days=1),  # Token expira em 1 dia
+                'iat': datetime.datetime.utcnow(),  # Hora de emissão do token
+                'sub': self.id,  # ID do usuário
+                'email': self.email  # Email do usuário
+            }
+            token = jwt.encode(payload, secret_key, algorithm='HS256')
+            return token
+        except Exception as e:
+            return str(e)

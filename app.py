@@ -1,5 +1,4 @@
 from flask import Flask, request, jsonify, g, url_for
-from flask_sqlalchemy import SQLAlchemy
 import stripe
 import os
 import jwt
@@ -51,7 +50,7 @@ def hello_world():
 
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.json()
+    data = request.json
     email = data.get('email')
     password = data.get('password')
 
@@ -62,37 +61,34 @@ def register():
         return jsonify({'error': 'User already exists'}), 400
 
     customer = stripe.Customer.create(email=email)
-    new_user = User(
-        email=email,
-        password=password,
-        stripe_customer_id=customer.id,
-        subscription_status='inactive'
-    )
-    db.session.add(new_user)
+
+    new_user = User.signup(username=email.split('@')[0], email=email, password=password)
+    new_user.stripe_customer_id = customer.id
+    new_user.subscription_status = 'inactive'
+
     db.session.commit()
 
-    # Gerar token JWT
+   
     auth_token = new_user.encode_auth_token(app.config['SECRET_KEY'])
 
-    return jsonify({'message': 'User registered successfully', 'auth_token': auth_token.decode()}), 201
+    return jsonify({'message': 'User registered successfully', 'auth_token': auth_token}), 201
+
 
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.json()
+    data = request.json  
     email = data.get('email')
     password = data.get('password')
 
     if not email or not password:
         return jsonify({'error': 'Email and password are required'}), 400
 
-    user = User.query.filter_by(email=email).first()
-    if user and user.password == password:
-        # Gerar token JWT
-        auth_token = user.encode_auth_token(app.config['SECRET_KEY'])
-        return jsonify({'message': 'Login successful', 'auth_token': auth_token.decode()}), 200
-    else:
-        return jsonify({'error': 'Invalid email or password'}), 401
+    user, auth_token = User.authenticate(email, password)
+    if not user:
+        return jsonify({"message": "Wrong email or password!"}), 401  
+
+    return jsonify({'message': 'Login successful', 'token': auth_token}), 200
 
 
 # @app.route('/subscribe', methods=['POST'])
